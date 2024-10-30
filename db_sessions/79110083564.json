@@ -1,0 +1,16 @@
+{
+    "app_id": 25802385,
+    "app_hash": "62988afd06260996a0801a9af8ac2dcd",
+    "two_fa": null,
+    "proxy": [
+        "HTTP",
+        "45.131.47.18",
+        64136,
+        true,
+        "abSbiWss",
+        "VHMKs1Xd"
+    ],
+    "proxy_type": "HTTP",
+    "device_model": "iPhone 14 Pro",
+    "system_version": "18.0.1"
+}
