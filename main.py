@@ -1,6 +1,7 @@
 from telethon import TelegramClient, events, connection
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.errors import SessionPasswordNeededError
+from telethon.tl.types import MessageEntityTextUrl
 from config import SESSIONS_DIR, DB_SESSIONS_DIR, LOG_FILE, MESSAGES_FILE, ENVELOPE_TIME_BEFORE_SEND_MESSAGE, MAX_ENVELOPE_MESSAGES_ALL_SESSIONS, ENVELOPE_EMOJI, MAX_LIMIT, DB_CLIENT_SESSION_NAME
 
 import json, os, random, logging, asyncio, time, sys
@@ -27,9 +28,6 @@ logger = logging.getLogger(__name__)
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(CustomFormatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger.addHandler(console_handler)
-
-PROXY_FILE = 'proxy.txt'
-mem_from_const = MAX_ENVELOPE_MESSAGES_ALL_SESSIONS # берем вторую переменную чтобы константа оставалась константой 
 
 def load_session_config(phone):
     session_path = os.path.join(SESSIONS_DIR, f'{phone}.json')
@@ -217,66 +215,15 @@ async def process_session(phone):
         "connection": None,
         "connection_cortege": None
     }
-
-    # Настройка кортежа в зависимости от типа прокси
     if proxy and proxy_type in ["HTTP", "SOCKS5"]:
         proxy_info["connection_cortege"] = (proxy_type, proxy[1], proxy[2], proxy[3], proxy[4], proxy[5])
-        print(proxy_info)
     elif proxy and proxy_type == "MTPROTO":
         proxy_info["connection"] = "ConnectionTcpMTProxy"
         proxy_info["connection_cortege"] = (proxy[1], proxy[2], proxy[5])
 
-    CLIENT_DB_SESSION = DB_CLIENT_SESSION_NAME
-    session_file_db = os.path.join(DB_SESSIONS_DIR, f'{CLIENT_DB_SESSION}.session')
-    
-    if proxy_info["type"] == "MTPROTO":
-        CLIENT_DB_SESSION = TelegramClient(
-            session_file_db,
-            api_id,
-            api_hash,
-            proxy=proxy_info["connection_cortege"],
-            connection=proxy_info["connection"], 
-            device_model='iPhone X', 
-            system_version='16', 
-            app_version='0.15.3.2'
-        )
-    elif proxy_info["type"] == "HTTP" or proxy_info["type"] == "SOCKS5":
-        CLIENT_DB_SESSION = TelegramClient(
-            session_file_db,
-            api_id,
-            api_hash,
-            proxy=proxy_info["connection_cortege"], 
-            device_model='iPhone X', 
-            system_version='16', 
-            app_version='0.15.3.2'
-        )
-    else:
-        CLIENT_DB_SESSION = TelegramClient(session_file_db, api_id, api_hash, device_model='iPhone X', system_version='16', app_version='0.15.3.2')
-    
-    # Создание клиента в зависимости от типа прокси
-    if proxy_info["type"] == "MTPROTO":
-        client = TelegramClient(
-            session_file,
-            api_id,
-            api_hash,
-            proxy=proxy_info["connection_cortege"],
-            connection=proxy_info["connection"], 
-            device_model='iPhone 16', 
-            system_version='16', 
-            app_version='0.15.3.2'
-        )
-    elif proxy_info["type"] == "HTTP" or proxy_info["type"] == "SOCKS5":
-        client = TelegramClient(
-            session_file,
-            api_id,
-            api_hash,
-            proxy=proxy_info["connection_cortege"], 
-            device_model='iPhone 16', 
-            system_version='16', 
-            app_version='0.15.3.2'
-        )
-    else:
-        client = TelegramClient(session_file, api_id, api_hash, device_model='iPhone 16', system_version='16', app_version='0.15.3.2')
+    await initialize_client_db_session(api_id, api_hash, proxy_info)
+
+    client = TelegramClient(session_file, api_id, api_hash, proxy=proxy_info["connection_cortege"], device_model='iPhone 16', system_version='16', app_version='0.15.3.2')
     
     try:
         await client.start(phone=phone)
@@ -285,25 +232,55 @@ async def process_session(phone):
         else:
             logger.error(f"Не удалось авторизоваться для {phone}")
             
-        await CLIENT_DB_SESSION.start(phone=CLIENT_DB_SESSION)
-        if await CLIENT_DB_SESSION.is_user_authorized():
-            logger.info(f"Успешная авторизация для {CLIENT_DB_SESSION}")
-        else:
-            logger.error(f"Не удалось авторизоваться для {CLIENT_DB_SESSION}")
-            
         soob = await client.get_entity('pidorasalbak52suiiii')
 
         @client.on(events.NewMessage(pattern='Отлично! Надеюсь хорошо проведете время', blacklist_chats=True, chats=soob))
         async def handle_favorite_message(event):
-            formatted_text = event.message.message
-            await CLIENT_DB_SESSION.send_message('me', formatted_text)
-            logger.info(f"Сообщение переслано в избранное для {phone}: {formatted_text}")
+            if hasattr(event.message, 'message'):
+                message_text = event.message.message
+                
+                url_entities = [entity for entity in event.message.entities if isinstance(entity, MessageEntityTextUrl)]
+
+                if url_entities:
+                    formatted_text = message_text
+                    for entity in url_entities:
+                        link_text = formatted_text[entity.offset:entity.offset + entity.length]
+                        link_url = entity.url
+                        formatted_text = formatted_text.replace(link_text, f"[{link_text}]({link_url})")
+                        
+                        formatted_text = f"Пришла взаимка от +{phone}\n\n " + link_url
+                    
+                    await CLIENT_DB_SESSION.send_message('me', formatted_text, parse_mode='markdown')
+                else:
+                    await CLIENT_DB_SESSION.send_message('me', message_text)
+                
+                logger.info(f"Сообщение переслано в избранное для +{phone}: {message_text}")
+            else:
+                logger.warning("Получено сообщение, которое не содержит текст.")
 
         @client.on(events.NewMessage(pattern='Есть взаимная симпатия! Начинай общаться', blacklist_chats=True, chats=soob))
         async def handle_favorite_message(event):
-            formatted_text = event.message.message
-            await CLIENT_DB_SESSION.send_message('me', formatted_text)
-            logger.info(f"Сообщение переслано в избранное для {phone}: {formatted_text}")
+            if hasattr(event.message, 'message'):
+                message_text = event.message.message
+                
+                url_entities = [entity for entity in event.message.entities if isinstance(entity, MessageEntityTextUrl)]
+
+                if url_entities:
+                    formatted_text = message_text
+                    for entity in url_entities:
+                        link_text = formatted_text[entity.offset:entity.offset + entity.length]
+                        link_url = entity.url
+                        formatted_text = formatted_text.replace(link_text, f"[{link_text}]({link_url})")
+                        
+                        formatted_text = f"Пришла взаимка от +{phone}\n\n " + link_url
+                    
+                    await CLIENT_DB_SESSION.send_message('me', formatted_text, parse_mode='markdown')
+                else:
+                    await CLIENT_DB_SESSION.send_message('me', message_text)
+                
+                logger.info(f"Сообщение переслано в избранное для {phone}: {message_text}")
+            else:
+                logger.warning("Получено сообщение, которое не содержит текст.")
             
         @client.on(events.NewMessage(pattern=r'Ты понравил', blacklist_chats=True, chats=soob))
         async def handle_favorite_message(event):

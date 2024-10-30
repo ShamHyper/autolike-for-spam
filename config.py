@@ -2,6 +2,7 @@ SESSIONS_DIR = './sessions/'
 LOG_FILE = './log/main.log'
 MESSAGES_FILE = './data/messages.txt'
 SYNONYMS_FILE = './data/synonyms.txt'
+DB_SESSIONS_DIR = './db_sessions/'
 
 ENVELOPE_EMOJI = ["✉️", "📩", "📨", "💌", "💌", "✉", "✉️", "📧", "📨", "📩", "💌", "🖂", "🖃", "💼", "📫", "📬", "📭", "📪", "📮", "📨", "✉️", "✉️"]
 
@@ -11,5 +12,5 @@ MAX_ENVELOPE_MESSAGES_ALL_SESSIONS = 3 # Писем перед дизлайка�
 MAX_LIMIT = 1 # Количество кругов
 
 DB_CLIENT_SESSION_NAME = 79110083564
-DB_SESSIONS_DIR = './db_sessions/'
+
 # 52
