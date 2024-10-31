@@ -29,10 +29,13 @@ console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(CustomFormatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger.addHandler(console_handler)
 
+with open('cts.txt', 'r', encoding='utf-8') as file:
+    cities = [line.strip() for line in file.readlines()]
+
 def load_session_config(phone):
     session_path = os.path.join(SESSIONS_DIR, f'{phone}.json')
     if os.path.exists(session_path):
-        with open(session_path, 'r') as file:
+        with open(session_path, 'r', encoding='utf-8') as file:
             return json.load(file)
     else:
         logger.error(f"Файл конфигурации {session_path} не найден!")
@@ -68,7 +71,7 @@ async def like_people(phone, client):
     generated_message = load_messages(MESSAGES_FILE)
     
     while True:
-        '''while iterrations < MAX_LIMIT:
+        while iterrations < MAX_LIMIT:
             try:
                 bot = await client.get_entity('leomatchbot')
                 messages = await client.get_messages(bot, limit=1)
@@ -156,7 +159,7 @@ async def like_people(phone, client):
             except Exception:
                 x = 0
                 x += 1
-                x -= 1 '''
+                x -= 1 
         # Режим наблюдения
         while True:
             if staying_alive == False:
@@ -208,18 +211,13 @@ async def process_session(phone):
     session_file = os.path.join(SESSIONS_DIR, f'{phone}.session')
     
     # Обработка прокси
-    proxy = config.get('proxy')
-    proxy_type = config.get('proxy_type', '').upper()
+    proxy_type = 'SOCKS5'
     proxy_info = {
         "type": proxy_type,
         "connection": None,
-        "connection_cortege": None
+        "connection_cortege": ("SOCKS5", "202.50.166.18", 8000, True, "5VCp7z", "XaeBj8")
     }
-    if proxy and proxy_type in ["HTTP", "SOCKS5"]:
-        proxy_info["connection_cortege"] = (proxy_type, proxy[1], proxy[2], proxy[3], proxy[4], proxy[5])
-    elif proxy and proxy_type == "MTPROTO":
-        proxy_info["connection"] = "ConnectionTcpMTProxy"
-        proxy_info["connection_cortege"] = (proxy[1], proxy[2], proxy[5])
+    # proxy_type, proxy[1], proxy[2], proxy[3], proxy[4], proxy[5])
 
     await initialize_client_db_session(api_id, api_hash, proxy_info)
 
@@ -231,16 +229,15 @@ async def process_session(phone):
             logger.info(f"Успешная авторизация для {phone}")
         else:
             logger.error(f"Не удалось авторизоваться для {phone}")
-            
-        soob = await client.get_entity('pidorasalbak52suiiii')
 
-        @client.on(events.NewMessage(pattern='Отлично! Надеюсь хорошо проведете время', blacklist_chats=True, chats=soob))
+        @client.on(events.NewMessage(pattern='Отлично! Надеюсь хорошо проведете время'))
         async def handle_favorite_message(event):
             if hasattr(event.message, 'message'):
                 message_text = event.message.message
-                
-                url_entities = [entity for entity in event.message.entities if isinstance(entity, MessageEntityTextUrl)]
+                phone = event.chat_id
 
+                url_entities = [entity for entity in event.message.entities if isinstance(entity, MessageEntityTextUrl)]
+                
                 if url_entities:
                     formatted_text = message_text
                     for entity in url_entities:
@@ -249,22 +246,29 @@ async def process_session(phone):
                         formatted_text = formatted_text.replace(link_text, f"[{link_text}]({link_url})")
                         
                         formatted_text = f"Пришла взаимка от +{phone}\n\n " + link_url
-                    
-                    await CLIENT_DB_SESSION.send_message('me', formatted_text, parse_mode='markdown')
                 else:
-                    await CLIENT_DB_SESSION.send_message('me', message_text)
+                    formatted_text = message_text
                 
-                logger.info(f"Сообщение переслано в избранное для +{phone}: {message_text}")
+                async for msg in client.iter_messages(event.chat_id, from_user='leomatchbot'):
+                    if msg.message and any(city in msg.message for city in cities):
+                        formatted_text += f"\n{msg.message}" 
+                        break
+                
+                await CLIENT_DB_SESSION.send_message('me', formatted_text, parse_mode='markdown')
+                logger.info(f"Сообщение переслано в избранное для {phone}: {formatted_text}")
             else:
                 logger.warning("Получено сообщение, которое не содержит текст.")
+            await asyncio.sleep(1)
 
-        @client.on(events.NewMessage(pattern='Есть взаимная симпатия! Начинай общаться', blacklist_chats=True, chats=soob))
+
+        @client.on(events.NewMessage(pattern='Есть взаимная симпатия! Начинай общаться'))
         async def handle_favorite_message(event):
             if hasattr(event.message, 'message'):
                 message_text = event.message.message
-                
-                url_entities = [entity for entity in event.message.entities if isinstance(entity, MessageEntityTextUrl)]
+                phone = event.chat_id 
 
+                url_entities = [entity for entity in event.message.entities if isinstance(entity, MessageEntityTextUrl)]
+                
                 if url_entities:
                     formatted_text = message_text
                     for entity in url_entities:
@@ -272,37 +276,42 @@ async def process_session(phone):
                         link_url = entity.url
                         formatted_text = formatted_text.replace(link_text, f"[{link_text}]({link_url})")
                         
-                        formatted_text = f"Пришла взаимка от +{phone}\n\n " + link_url
-                    
-                    await CLIENT_DB_SESSION.send_message('me', formatted_text, parse_mode='markdown')
+                        formatted_text = f"Пришла взаимка от +{phone}\n\n" + link_url
                 else:
-                    await CLIENT_DB_SESSION.send_message('me', message_text)
+                    formatted_text = message_text
                 
-                logger.info(f"Сообщение переслано в избранное для {phone}: {message_text}")
+                async for msg in client.iter_messages(event.chat_id, from_user='leomatchbot'):
+                    if any(city in msg.message for city in 'leomatchbot'):
+                        formatted_text += f"\n\n{msg.message}"
+                        break
+                
+                await CLIENT_DB_SESSION.send_message('me', formatted_text, parse_mode='markdown')
+                logger.info(f"Сообщение переслано в избранное для {phone}: {formatted_text}")
             else:
                 logger.warning("Получено сообщение, которое не содержит текст.")
+            await asyncio.sleep(1)
             
-        @client.on(events.NewMessage(pattern=r'Ты понравил', blacklist_chats=True, chats=soob))
+        @client.on(events.NewMessage(pattern=r'Ты понравил'))
         async def handle_favorite_message(event):
             bot = await client.get_entity('leomatchbot')
             await asyncio.sleep(1)
             await client.send_message(bot, "1")
             logger.info(f"Пришёл лайк для {phone}: {event.raw_text}")
 
-        @client.on(events.NewMessage(pattern=r'Кому-то понравилась', blacklist_chats=True, chats=soob))
+        @client.on(events.NewMessage(pattern=r'Кому-то понравилась'))
         async def handle_favorite_message(event):
             bot = await client.get_entity('leomatchbot')
             await asyncio.sleep(1)
             await client.send_message(bot, "1")
             logger.info(f"Пришёл лайк для {phone}: {event.raw_text}")
             
-        @client.on(events.NewMessage(pattern=r'Буст повышается только у подписчиков моего канала', blacklist_chats=True, chats=soob))
+        @client.on(events.NewMessage(pattern=r'Буст повышается только у подписчиков моего канала'))
         async def handle_favorite_message(event):
             channel = await client.get_entity('leoday')
             await client(JoinChannelRequest(channel))
             logger.info(f"Кажется кто-то не подписался на канал {phone}: {event.raw_text}")
             
-        @client.on(events.NewMessage(pattern=r'буст твоей анкеты понижен', blacklist_chats=True, chats=soob))
+        @client.on(events.NewMessage(pattern=r'буст твоей анкеты понижен'))
         async def handle_favorite_message(event):
             channel = await client.get_entity('leoday')
             await client(JoinChannelRequest(channel))
