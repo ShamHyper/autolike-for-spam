@@ -60,7 +60,7 @@ def generate_text_keyboard(keyboard):
     return result
 
 async def like_people(phone, client):
-    logger.info("Запуск функции like_people")
+    logger.info(f"[{phone}] Запуск функции like_people")
     staying_alive = False
     iterrations = 0
     buttons_not_found = 0
@@ -113,7 +113,7 @@ async def like_people(phone, client):
                         if count_sended_envelope >= MAX_ENVELOPE_MESSAGES_ALL_SESSIONS:
                             if count_dislike == 0:
                                 await client.send_message(bot, "👎")
-                                logger.info(f"Отправлен дизлайк после {count_sended_envelope} конвертов.")
+                                logger.info(f"[{phone}] Отправлен дизлайк после {count_sended_envelope} конвертов.")
                                 count_dislike += 1
                                 count_sended_envelope = 0
                                 iterrations += 1 
@@ -124,13 +124,13 @@ async def like_people(phone, client):
                         if any(char in item for item in button.text for char in ENVELOPE_EMOJI if char.strip()):
                             await client.send_message(bot, button.text)
                             found = True
-                            logger.info(f"Нажата кнопка {button.text}")
+                            logger.info(f"[{phone}] Нажата кнопка {button.text}")
                             random_message = generate_random_message(generated_message)
                             await asyncio.sleep(1)
-                            logger.info(f"Спим прежде чем отправить сообщение: {ENVELOPE_TIME_BEFORE_SEND_MESSAGE} секунд")
+                            logger.info(f"[{phone}] Спим прежде чем отправить сообщение: {ENVELOPE_TIME_BEFORE_SEND_MESSAGE} секунд")
                             await asyncio.sleep(ENVELOPE_TIME_BEFORE_SEND_MESSAGE)
                             await client.send_message(bot, random_message)
-                            logger.info(f"Отправлено сообщение: {random_message}")
+                            logger.info(f"[{phone}] Отправлено сообщение: {random_message}")
 
                             count_sended_envelope += 1
                             count_dislike = 0  
@@ -163,7 +163,7 @@ async def like_people(phone, client):
         # Режим наблюдения
         while True:
             if staying_alive == False:
-                logger.info("Наблюдаем за ситуацией, больше не тыкаем никуда!")
+                logger.info(f"[{phone}] Наблюдаем за ситуацией, больше не тыкаем никуда!")
                 staying_alive = True
             await asyncio.Event().wait()
             
@@ -215,7 +215,7 @@ async def process_session(phone):
     proxy_info = {
         "type": proxy_type,
         "connection": None,
-        "connection_cortege": ("SOCKS5", "202.50.166.18", 8000, True, "5VCp7z", "XaeBj8")
+        "connection_cortege": ("SOCKS5", "139.84.231.128", 30062, True, "nuhayproxy_9atgu", "lZplCEY1")
     }
     # proxy_type, proxy[1], proxy[2], proxy[3], proxy[4], proxy[5])
 
@@ -234,7 +234,6 @@ async def process_session(phone):
         async def handle_favorite_message(event):
             if hasattr(event.message, 'message'):
                 message_text = event.message.message
-                phone = event.chat_id
 
                 url_entities = [entity for entity in event.message.entities if isinstance(entity, MessageEntityTextUrl)]
                 
@@ -245,27 +244,30 @@ async def process_session(phone):
                         link_url = entity.url
                         formatted_text = formatted_text.replace(link_text, f"[{link_text}]({link_url})")
                         
-                        formatted_text = f"Пришла взаимка от +{phone}\n\n " + link_url
+                    formatted_text = f"Пришла взаимка от +{phone}\n\n {link_url}"
                 else:
                     formatted_text = message_text
                 
+                city_added = False
                 async for msg in client.iter_messages(event.chat_id, from_user='leomatchbot'):
-                    if msg.message and any(city in msg.message for city in cities):
-                        formatted_text += f"\n{msg.message}" 
-                        break
-                
+                    if msg.message and not city_added:
+                        for city in cities:
+                            match = re.search(rf'\b{city}\b', msg.message, re.IGNORECASE)
+                            if match:
+                                formatted_text += f" | {match.group(0)}"
+                                city_added = True
+                                break
+
                 await CLIENT_DB_SESSION.send_message('me', formatted_text, parse_mode='markdown')
-                logger.info(f"Сообщение переслано в избранное для {phone}: {formatted_text}")
+                logger.info(f"[{phone}] Сообщение переслано в избранное для {phone}: {formatted_text}")
             else:
                 logger.warning("Получено сообщение, которое не содержит текст.")
             await asyncio.sleep(1)
-
 
         @client.on(events.NewMessage(pattern='Есть взаимная симпатия! Начинай общаться'))
         async def handle_favorite_message(event):
             if hasattr(event.message, 'message'):
                 message_text = event.message.message
-                phone = event.chat_id 
 
                 url_entities = [entity for entity in event.message.entities if isinstance(entity, MessageEntityTextUrl)]
                 
@@ -276,17 +278,22 @@ async def process_session(phone):
                         link_url = entity.url
                         formatted_text = formatted_text.replace(link_text, f"[{link_text}]({link_url})")
                         
-                        formatted_text = f"Пришла взаимка от +{phone}\n\n" + link_url
+                    formatted_text = f"Пришла взаимка от +{phone}\n\n {link_url}"
                 else:
                     formatted_text = message_text
                 
+                city_added = False
                 async for msg in client.iter_messages(event.chat_id, from_user='leomatchbot'):
-                    if any(city in msg.message for city in 'leomatchbot'):
-                        formatted_text += f"\n\n{msg.message}"
-                        break
-                
+                    if msg.message and not city_added:
+                        for city in cities:
+                            match = re.search(rf'\b{city}\b', msg.message, re.IGNORECASE)
+                            if match:
+                                formatted_text += f" | {match.group(0)}"
+                                city_added = True
+                                break
+
                 await CLIENT_DB_SESSION.send_message('me', formatted_text, parse_mode='markdown')
-                logger.info(f"Сообщение переслано в избранное для {phone}: {formatted_text}")
+                logger.info(f"[{phone}] Сообщение переслано в избранное для {phone}: {formatted_text}")
             else:
                 logger.warning("Получено сообщение, которое не содержит текст.")
             await asyncio.sleep(1)
@@ -296,33 +303,33 @@ async def process_session(phone):
             bot = await client.get_entity('leomatchbot')
             await asyncio.sleep(1)
             await client.send_message(bot, "1")
-            logger.info(f"Пришёл лайк для {phone}: {event.raw_text}")
+            logger.info(f"[{phone}] Пришёл лайк для {phone}: {event.raw_text}")
 
         @client.on(events.NewMessage(pattern=r'Кому-то понравилась'))
         async def handle_favorite_message(event):
             bot = await client.get_entity('leomatchbot')
             await asyncio.sleep(1)
             await client.send_message(bot, "1")
-            logger.info(f"Пришёл лайк для {phone}: {event.raw_text}")
+            logger.info(f"[{phone}] Пришёл лайк для {phone}: {event.raw_text}")
             
         @client.on(events.NewMessage(pattern=r'Буст повышается только у подписчиков моего канала'))
         async def handle_favorite_message(event):
             channel = await client.get_entity('leoday')
             await client(JoinChannelRequest(channel))
-            logger.info(f"Кажется кто-то не подписался на канал {phone}: {event.raw_text}")
+            logger.info(f"[{phone}] Кажется кто-то не подписался на канал {phone}: {event.raw_text}")
             
         @client.on(events.NewMessage(pattern=r'буст твоей анкеты понижен'))
         async def handle_favorite_message(event):
             channel = await client.get_entity('leoday')
             await client(JoinChannelRequest(channel))
-            logger.info(f"Кажется кто-то не подписался на канал {phone}: {event.raw_text}")
+            logger.info(f"[{phone}] Кажется кто-то не подписался на канал {phone}: {event.raw_text}")
 
         await like_people(phone, client)
 
     except SessionPasswordNeededError:
-        logger.error(f"Необходим пароль для двухфакторной аутентификации для {phone}")
+        logger.error(f"[{phone}] Необходим пароль для двухфакторной аутентификации для {phone}")
     except Exception as e:
-        logger.error(f"Ошибка для {phone}: {e}")
+        logger.error(f"[{phone}] Ошибка для {phone}: {e}")
     finally:
         await client.disconnect()
 
