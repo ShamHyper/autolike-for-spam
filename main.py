@@ -62,7 +62,7 @@ def generate_text_keyboard(keyboard):
 async def like_people(phone, client):
     logger.info(f"[{phone}] Запуск функции like_people")
     staying_alive = False
-    iterrations = 0
+    iterrations = 1
     buttons_not_found = 0
     buttons_not_found_2 = 0
     count_sended_envelope = 0
@@ -73,6 +73,7 @@ async def like_people(phone, client):
     while True:
         while iterrations < MAX_LIMIT:
             try:
+                logger.info(f"[{phone}] ИТЕРАЦИЯ #{iterrations}")
                 bot = await client.get_entity('leomatchbot')
                 messages = await client.get_messages(bot, limit=1)
                 reply_markup = messages[0].reply_markup
@@ -117,7 +118,6 @@ async def like_people(phone, client):
                                 count_dislike += 1
                                 count_sended_envelope = 0
                                 iterrations += 1 
-                                logger.info(f"[{phone}] ИТЕРАЦИЯ #{iterrations} находится в цикле дизлайка")
                                 await asyncio.sleep(1)
                                 continue
 
@@ -138,6 +138,7 @@ async def like_people(phone, client):
 
                     if found:
                         buttons_not_found = 0
+                        buttons_not_found_2 = 0
                         break
 
                 if not found and buttons_not_found_2 < 4:
@@ -154,7 +155,6 @@ async def like_people(phone, client):
                         break
                     
                 await asyncio.sleep(3)
-                logger.info(f"[{phone}] ИТЕРАЦИЯ #{iterrations}")
                 
             except Exception:
                 x = 0
